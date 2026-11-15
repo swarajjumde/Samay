@@ -24,7 +24,7 @@ browser ──> nginx ──┬──>  /api/...   => Laravel   (api/public/inde
 
 ---
 
-## Server pe live karna (AWS EC2, Ubuntu 24.04)
+## Server pe live karna (AWS EC2, Ubuntu 24.04 ya naya)
 
 Zaroorat: EC2 server chalu ho, aur uske **Security group** mein **HTTP (80)** khula ho (HTTPS ke liye baad mein 443 bhi).
 
@@ -48,7 +48,7 @@ cd /var/www/samay
 sudo bash deploy/setup-server.sh
 ```
 
-Ye nginx, PHP 8.3, MySQL, Composer, Node install karta hai, database banata hai aur nginx config lagata hai. Script khol ke padho, har step pe comment hai.
+Ye nginx, PHP (8.3 ya naya), MySQL, Composer, Node install karta hai, database banata hai aur nginx config lagata hai. Script khol ke padho, har step pe comment hai.
 
 **4. Deploy karo**
 
@@ -152,7 +152,7 @@ Tests: `cd api && php artisan test`
 | Dikkat | Kya dekhna hai |
 |---|---|
 | Page nahi khul raha | Security group mein port 80 khula hai? `sudo systemctl status nginx` |
-| 502 Bad Gateway | `sudo systemctl status php8.3-fpm` |
+| 502 Bad Gateway | `systemctl status 'php*-fpm'` |
 | API se 500 error | `tail -n 50 /var/www/samay/api/storage/logs/laravel.log` |
 | nginx ka error | `sudo tail -n 50 /var/log/nginx/error.log` |
 | `.env` badla par asar nahi | `cd api && php artisan config:cache` |

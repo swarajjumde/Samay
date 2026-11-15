@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Samay: server ko PEHLI BAAR taiyaar karne ka script (Ubuntu 24.04, AWS EC2)
+# Samay: server ko PEHLI BAAR taiyaar karne ka script (Ubuntu 24.04 ya naya, AWS EC2)
 #
 # Chalao (sirf ek baar):   sudo bash deploy/setup-server.sh
 # Dobara chalane se kuch tootega nahi, jo ho chuka hai wo skip ho jayega.
 #
 # Ye kya-kya karta hai:
 #   1. Swap (extra "nakli RAM") banata hai, chhoti machine pe build ke liye zaroori
-#   2. nginx, PHP 8.3, MySQL install karta hai
+#   2. nginx, PHP (jo version Ubuntu ke saath aata hai, 8.3 ya naya), MySQL install karta hai
 #   3. Composer (PHP ka package manager) install karta hai
 #   4. Node.js 22 install karta hai (Vue build ke liye)
 #   5. MySQL mein database + user banata hai (random password ke saath)
@@ -48,13 +48,23 @@ else
 fi
 
 # ---- 2. Packages ---------------------------------------------------------------
-step "2/7 nginx, PHP 8.3, MySQL install"
+step "2/7 nginx, PHP, MySQL install"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
+# "php-fpm" jaise bina version wale naam Ubuntu ka apna PHP version laate hain
+# (24.04 pe 8.3, 26.04 pe usse naya). Isliye script har Ubuntu pe chalta hai.
 apt-get install -y nginx mysql-server \
-    php8.3-fpm php8.3-cli php8.3-mysql php8.3-sqlite3 php8.3-mbstring php8.3-xml \
-    php8.3-curl php8.3-zip php8.3-bcmath php8.3-intl \
+    php-fpm php-cli php-mysql php-sqlite3 php-mbstring php-xml \
+    php-curl php-zip php-bcmath php-intl \
     git curl unzip acl ca-certificates gnupg openssl
+
+PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
+if ! php -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);'; then
+    echo "PHP ${PHP_VERSION} mila, par Laravel 13 ko 8.3 ya naya chahiye. Ubuntu 24.04 ya naya use karo." >&2
+    exit 1
+fi
+PHP_FPM="php${PHP_VERSION}-fpm"
+echo "PHP ${PHP_VERSION} install hua (service: ${PHP_FPM})."
 
 # ---- 3. Composer ---------------------------------------------------------------
 step "3/7 Composer"
@@ -75,10 +85,15 @@ else
 fi
 
 # ---- 4. Node.js 22 -------------------------------------------------------------
-step "4/7 Node.js 22"
+step "4/7 Node.js (20 ya naya)"
+NODE_CANDIDATE="$(apt-cache policy nodejs | awk '/Candidate:/ {print $2}' | sed -E 's/^[0-9]+://' | cut -d. -f1)"
 if command -v node >/dev/null && [[ "$(node -v | cut -d. -f1 | tr -d v)" -ge 20 ]]; then
     echo "Node $(node -v) pehle se hai, skip."
+elif [[ "$NODE_CANDIDATE" =~ ^[0-9]+$ && "$NODE_CANDIDATE" -ge 20 ]]; then
+    # Ubuntu ka apna Node kaafi naya hai (26.04 pe), wahi le lo.
+    apt-get install -y nodejs npm
 else
+    # Purane Ubuntu (24.04) ka Node purana hai, isliye NodeSource se Node 22.
     mkdir -p /etc/apt/keyrings
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
@@ -126,11 +141,12 @@ setfacl -dR -m u:www-data:rwX,u:"$APP_USER":rwX "$APP_DIR/api/storage" "$APP_DIR
 
 # ---- 7. nginx ------------------------------------------------------------------
 step "7/7 nginx config"
-systemctl enable --now php8.3-fpm nginx
+systemctl enable --now "$PHP_FPM" nginx
 if [[ -f /etc/nginx/sites-available/samay ]]; then
     echo "nginx config pehle se hai, usse chheda nahi (HTTPS settings bachi rahein)."
 else
-    cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/samay
+    # nginx.conf mein php8.3 likha hai; yahan usse is server ke PHP version se badal dete hain.
+    sed -E "s|php[0-9.]+-fpm\.sock|${PHP_FPM}.sock|" "$APP_DIR/deploy/nginx.conf" > /etc/nginx/sites-available/samay
     ln -sf /etc/nginx/sites-available/samay /etc/nginx/sites-enabled/samay
     rm -f /etc/nginx/sites-enabled/default
 fi

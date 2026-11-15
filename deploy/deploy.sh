@@ -105,7 +105,8 @@ npm ci --no-audit --no-fund
 npm run build
 
 step "5/5 Reload"
-sudo systemctl reload php8.3-fpm
+PHP_FPM="php$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')-fpm"
+sudo systemctl reload "$PHP_FPM"
 sudo systemctl reload nginx
 
 echo
